@@ -175,3 +175,52 @@ def test_return(ex):
             return i
     """
     assert ex(expr) == 5
+
+
+def test_try(ex):
+    expr = """
+    try:
+        1/0
+    except:
+        return 1
+    """
+    assert ex(expr) == 1
+
+    expr = """
+    try:
+        1/0
+    except ZeroDivisionError:
+        return 1
+    """
+    assert ex(expr) == 1
+
+    expr = """
+    try:
+       1/0
+    except (TypeError, ZeroDivisionError):
+       return 2
+    """
+    assert ex(expr) == 2
+
+    expr = """
+    try:
+      raise Exception()
+    except:
+      return 'foo'
+    finally:
+      return 'bar'
+    """
+    assert ex(expr) == 'bar'
+
+    expr = """
+    try:
+        i = 5
+    except:
+        i = None
+    else:
+        i = 6
+    finally:
+        i = 10 - i
+    return i
+    """
+    assert ex(expr) == 4

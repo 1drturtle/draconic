@@ -290,7 +290,8 @@ class DraconicInterpreter(SimpleInterpreter):
             ast.While: self._exec_while,
             ast.Break: self._exec_break,
             ast.Continue: self._exec_continue,
-            ast.Pass: lambda node: None
+            ast.Pass: lambda node: None,
+            ast.Try: self._exec_try
         })
 
         if hasattr(ast, 'NamedExpr'):
@@ -564,3 +565,48 @@ class DraconicInterpreter(SimpleInterpreter):
 
     def _exec_continue(self, node):
         raise self._Continue
+
+    def _exec_try(self, node):
+        try:
+            self._exec(node.body)
+        except (AnnotatedException, DraconicException, NotDefined) as e:
+            for handler in node.handlers:
+                # set error name if it is defined like `Exception as e`
+                if handler.name:
+                    self._assign(handler.name, e)
+                # if we have a broad handler, just exec and stop
+                if not handler.type:
+                    self._exec(handler.body)
+                    break
+
+                # handle an individual type and it's code
+                def handle_exception(item, runnable=None):
+                    # Matches Exception Class name
+                    if e.__class__.__name__ == item.id:
+                        self._exec(runnable if runnable else item.body)
+                        return True
+                    # Matches Original Exception Class name (like from an AnnotatedException)
+                    elif hasattr(e, 'original') and e.original.__class__.__name__ == item.id:
+                        self._exec(runnable if runnable else item.body)
+                        return True
+                    return False
+
+                if isinstance(handler.type, ast.Tuple):
+                    # Go through each Exception type and run it
+                    for exception in handler.type.elts:
+                        out = handle_exception(exception, handler.body)
+                        if out:
+                            break
+                elif isinstance(handler.type, ast.Name):
+                    # Run the individual Exception type
+                    result = handle_exception(handler.type, handler.body)
+                    if result:
+                        break
+        else:
+            # execute the else block if we have one
+            if node.orelse:
+                self._exec(node.orelse)
+        finally:
+            # execute the finally block if we have one
+            if node.finalbody:
+                self._exec(node.finalbody)
